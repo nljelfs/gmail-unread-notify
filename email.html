@@ -1,0 +1,9 @@
+<table border="1">
+  <? for (var i = 0; i < unreadMessages.length; i++) { ?>
+    <tr>
+      <td><?= unreadMessages[i]["date"] ?></td>
+      <td><b><?= unreadMessages[i]["from"] ?></b></td>
+      <td><?= unreadMessages[i]["subject"] ?></td>
+    </tr>
+  <? } ?>
+</table>

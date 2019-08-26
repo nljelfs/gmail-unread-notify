@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <script>    
+      /*
+       * Render unread messages and project trigger tables
+       */
+      function formatUnreadTable(unreadMessages) {       
+        var table = "<table border='1'>";
+        for (var i = 0; i < unreadMessages.length; i++) {
+          table += "<tr>";
+          table += "  <td>" + unreadMessages[i]["date"] + "</td>";
+          table += "  <td><b>" + unreadMessages[i]["from"] + "</b></td>";
+          table += "  <td>" + unreadMessages[i]["subject"] + "</td>";
+          table += "</tr>";
+        }
+        table += "</table>";
+        
+        return table;
+      }
+      
+      function formatTriggerTable(projectTriggers) {       
+        var table = "<table border='1'>";
+        for (var i = 0; i < projectTriggers.length; i++) {
+          table += "<tr>";
+          table += "  <td>" + projectTriggers[i]["id"] + "</td>";
+          table += "  <td>" + projectTriggers[i]["type"] + "</td>";
+          table += "  <td>" + projectTriggers[i]["handler"] + "</td>";
+          table += "  <td><input type='button' value='Delete' onclick='handleDeleteTrigger(this, \"" + projectTriggers[i]["id"] + "\")' /></td>";
+          table += "</tr>";
+        }
+        table += "</table>";
+        
+        return table;
+      }
+      
+      function updateDiv(name, html) {
+        var div = document.getElementById(name);
+        div.innerHTML = html;
+      }
+      
+      /*
+       * Handlers for server responses.
+       */
+      function onGetUnreadSuccess(unreadMessages, button) {
+        if (unreadMessages) {
+          updateDiv('output', 'You have ' + unreadMessages.length + ' unread message' + ((unreadMessages.length != 1) ? "s" : "") + ' in your Gmail inbox.');
+          updateDiv('unread', formatUnreadTable(unreadMessages));
+        } else {
+          updateDiv('output', "ERROR: empty unread messages received from server");
+        }
+        button.disabled = false;
+      }
+
+      function onGetUnreadFailure(error, button) {
+        updateDiv('output', "ERROR: failed to get unread messages: " + error.message);
+        button.disabled = false;
+      }
+      
+      function onEmailSuccess(value, button) {
+        updateDiv('output', "Set email address to " + value);
+        button.disabled = false;
+      }
+      
+      function onEmailFailure(button) {
+        updateDiv('output', "ERROR: failed to set email address: " + error.message);
+        button.disabled = false;
+      }
+      
+      function onGetTriggersSuccess(projectTriggers) {
+        updateDiv('triggers', formatTriggerTable(projectTriggers));
+      }
+      
+      function onGetTriggersFailure(error) {
+        updateDiv('output', "ERROR: failed to get triggers: " + error.message);
+      }
+      
+      function onCreateTriggerSuccess(value, button) {
+        updateDiv('output', "Created trigger " + value);
+        google.script.run.withSuccessHandler(onGetTriggersSuccess)
+                         .withFailureHandler(onGetTriggersFailure)
+                         .getTriggers();
+        button.disabled = false;
+      }
+      
+      function onCreateTriggerFailure(error, button) {
+        updateDiv('output', "ERROR: failed to create trigger: " + error.message);
+        button.disabled = false;
+      }
+            
+      function onDeleteTriggerSuccess(return_value, obj) {
+        if (return_value) {
+          updateDiv('output', 'Deleted trigger ' + obj["trigger_id"]);
+          google.script.run.withSuccessHandler(onGetTriggersSuccess)
+                           .withFailureHandler(onGetTriggersFailure)
+                           .getTriggers();
+        } else {
+          updateDiv('output', 'Failed to delete trigger ' + obj["trigger_id"]);
+        };
+        obj["button"].disabled = false;
+      }
+      
+      function onDeleteTriggerFailure(error, obj) {
+        updateDiv('output', "ERROR: failed to delete trigger " + obj["trigger_id"]);
+        obj["button"].disabled = false;
+      }
+      
+      /*
+       * Form and button handlers.
+       */
+      function handleEmail(button) {
+        function validateEmail(email) {
+          if (/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/.test(email)) {
+            return true;
+          } else {
+            return false;
+          }
+        }
+        
+        var email = document.getElementById("email");
+        if (validateEmail(email.value)) {
+          button.disabled = true;
+          updateDiv('output', "Update email address on server to " + email.value);
+          email.style.borderColor = "green";
+          google.script.run.withSuccessHandler(onEmailSuccess)
+                           .withFailureHandler(onEmailFailure)
+                           .withUserObject(button)
+                           .setEmail(email.value);
+        } else {
+          email.style.borderColor = "red";
+          updateDiv('output', "Invalid email address " + email.value);
+        }
+      }
+      
+      function handleGetUnread(button) {
+        button.disabled = true;
+        updateDiv('output', "Send get unread request to server");
+        google.script.run.withSuccessHandler(onGetUnreadSuccess)
+                         .withFailureHandler(onGetUnreadFailure)
+                         .withUserObject(button)
+                         .getUnreadMessages();
+      }
+      
+      function handleCreateTrigger(button) {
+        button.disabled = true;
+        updateDiv('output', "Send create trigger request to server");
+        google.script.run.withSuccessHandler(onCreateTriggerSuccess)
+                         .withFailureHandler(onCreateTriggerFailure)
+                         .withUserObject(button)
+                         .createTimeDrivenTrigger();
+      }
+      
+      function handleDeleteTrigger(button, trigger_id) {
+        button.disabled = true;
+        updateDiv('output', "Send delete trigger request to server for " + trigger_id);
+        google.script.run.withSuccessHandler(onDeleteTriggerSuccess)
+                         .withFailureHandler(onDeleteTriggerFailure)
+                         .withUserObject({ "button": button, "trigger_id": trigger_id })
+                         .deleteTrigger(trigger_id);
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Output</h1>
+    <div id="output">Output placeholder</div>
+    <h1>Unread messages</h1>
+    <div id="unread">
+      <? unreadMessages = getUnreadMessages(); ?>
+      <? if (unreadMessages.length) { ?>
+      <table border='1'>
+      <? } ?>
+        <? for (var i = 0; i < unreadMessages.length; i++) { ?>
+          <tr>
+            <td><?= unreadMessages[i]["date"] ?></td>
+            <td><b><?= unreadMessages[i]["from"] ?></b></td>
+            <td><?= unreadMessages[i]["subject"] ?></td>
+          </tr>
+        <? } ?>
+      <? if (unreadMessages.length) { ?>
+      </table>
+      <? } ?>    
+    </div>
+    <input type="button" value="Get unread" onclick="handleGetUnread(this)" />
+    <h1>Triggers</h1>
+    <div id="set_email">
+      <span><input type="text" id="email" value="<?= getEmail() ?>" /></span>
+      <span><input type="button" value="Set email" onclick="handleEmail(this)" /></span>
+    </div>
+    <div id="triggers">
+      <? projectTriggers = getTriggers(); ?>
+      <? if (projectTriggers.length) { ?>
+      <table border='1'>
+      <? } ?>
+        <? for (var i = 0; i < projectTriggers.length; i++) { ?>
+          <tr>
+            <td><?= projectTriggers[i]["id"] ?></td>
+            <td><?= projectTriggers[i]["type"] ?></td>
+            <td><?= projectTriggers[i]["handler"] ?></td>
+            <td><input type="button" value="Delete" onclick="handleDeleteTrigger(this, '<?= projectTriggers[i]["id"] ?>')" /></td>
+          </tr>
+        <? } ?>
+      <? if (unreadMessages.length) { ?>
+      </table>
+      <? } ?>
+    </div>
+    <input type="button" value="Create trigger" onclick="handleCreateTrigger(this)" />
+  </body>
+</html>
